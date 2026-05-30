@@ -1,0 +1,8 @@
+.codex/
+.tmp-codex-skills/
+.env
+.env.*
+*.log
+__pycache__/
+*.pyc
+claude-run-*/

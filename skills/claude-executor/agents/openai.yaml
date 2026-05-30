@@ -1,0 +1,4 @@
+display_name: Claude Executor
+short_description: Delegate implementation attempts to local Claude Code, then verify in Codex.
+default_prompt: Use the Claude executor workflow for this task. Plan in Codex, delegate execution to local Claude Code only if enabled, then verify the diff, logs, and tests before accepting.
+

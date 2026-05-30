@@ -4,7 +4,9 @@
 
 This framework separates **thinking authority** from **execution labor**.
 
-Codex stays responsible for the objective, task decomposition, permission decisions, and final acceptance. Claude Code with DeepSeek API is used as a lower-cost worker that can advise, implement, and review, but it does not decide whether the work is correct.
+In the reference implementation, Codex stays responsible for the objective, task decomposition, permission decisions, and final acceptance. Claude Code with DeepSeek API is used as a lower-cost worker that can advise, implement, and review, but it does not decide whether the work is correct.
+
+In the generalized methodology, any tool can fill these roles. The important rule is that tasks are routed by capability, cost, quota pressure, and verifiability.
 
 ## Role Definition
 
@@ -15,6 +17,8 @@ Codex stays responsible for the objective, task decomposition, permission decisi
 | Executor | Claude Code | Make scoped edits and run requested validation |
 | Reviewer | Claude Code | Second opinion on diff, logs, and result |
 | Human | User | Sets high-level goals and approves sensitive operations |
+
+The Codex + Claude/DeepSeek pairing is one concrete instance. A pair of similar monthly subscription tools can use the same role table to balance remaining usage.
 
 ## Why It Reduces Cost
 

@@ -1,10 +1,21 @@
 # Codex-Claude Executor Framework
 
+> Reference implementation of a broader multi-tool method: route work across AI coding tools by capability, quota, marginal cost, and verifiability.
+
+This repository uses Codex as the principal verifier and Claude Code with DeepSeek API as a lower-cost delegated executor. That pairing is only one case. The same flow also applies when a user has two comparable monthly subscriptions and wants to balance usage before either quota is exhausted.
+
+Core methodological claim:
+
+- Stronger or scarcer models should handle planning, risk judgment, and final verification.
+- Cheaper or more available models should handle bounded implementation loops when tests are strong.
+- Comparable subscription tools should be balanced by remaining usage and role fit.
+- Context should move through durable artifacts such as `TASK.md`, not through repeated manual chat summaries.
+
 一个面向本地科研实验、代码试错和工程任务的多代理工作流：
 
 **Codex 负责规划、权限判断和最终验收；Claude Code + DeepSeek API 负责低成本执行、独立建议和独立审查。**
 
-这个项目来自一个已跑通的本地 demo。目标不是让多个模型同时失控地改代码，而是把它们组织成一个可审计、可开关、可验收的工程流程。
+这个项目来自一个已跑通的本地 demo。目标不是让多个模型同时失控地改代码，而是把它们组织成一个可审计、可开关、可验收、可按用量调度的工程流程。
 
 ## Why
 
@@ -16,9 +27,22 @@
 核心收益：
 
 - 降低 Codex 在重复实现和修错阶段的用量。
+- 降低从一个模型切换到另一个模型时的上下文迁移成本。
+- 根据用量限制、API 预算、模型特点和任务风险进行分工。
 - 通过 `advise -> execute -> review` 增加独立检查。
 - 所有 Claude 输出都落盘为文件，方便 Codex 和人类复核。
 - 默认禁用，按任务显式启用，降低误调用和权限风险。
+
+## Practical Innovation
+
+很多用户会同时拥有 Codex、Claude Code、GPT Pro 或其他 API 模型。真实工作中，一个工具用量不够时，用户往往手动把上下文迁移到另一个模型，这会带来：
+
+- 重复解释任务背景；
+- 丢失已做过的尝试和失败记录；
+- 不同模型之间决策不一致；
+- 高价值模型用量被消耗在重复试错上。
+
+本框架把上下文固化为 `TASK.md`、`RESULT.md`、`CLAUDE_ADVICE.md`、`CLAUDE_REVIEW.md`。因此模型切换不再依赖长聊天历史，而是依赖可审计的任务文件。Codex 可以根据当前用量和任务类型，把重复执行交给 Claude Code + DeepSeek，把规划和验收留给自己。
 
 ## Architecture
 
@@ -64,6 +88,9 @@ Codex plan -> Claude advise -> Codex revise task -> Claude execute -> Claude rev
 .
 |-- README.md
 |-- docs/
+|   |-- paper.md
+|   |-- manual.md
+|   |-- scheduler.md
 |   |-- methodology.md
 |   `-- workflow.md
 |-- demo/
@@ -137,6 +164,15 @@ Disable after use:
 & "$HOME\.codex\skills\claude-executor\scripts\Set-ClaudeExecutor.ps1" -Enabled $false
 ```
 
+## Documentation
+
+- [Academic-style paper](docs/paper.md): problem statement, architecture, workflow, evaluation criteria, and limitations.
+- [User manual](docs/manual.md): installation, task writing, three-pass usage, recovery, and verification.
+- [Usage-aware scheduler](docs/scheduler.md): how to route tasks based on usage, cost, risk, and model strengths.
+- [Generalized framework](docs/generalized-framework.md): how the method extends beyond Codex + Claude/DeepSeek to any multi-tool setup.
+- [Methodology](docs/methodology.md): role separation and acceptance rule.
+- [Workflow](docs/workflow.md): state machine, permission strategy, and run artifacts.
+
 ## Demo Result
 
 The included demo fixes a small Python function:
@@ -172,4 +208,3 @@ $HOME\.codex\claude-executor\config.json
 ## License
 
 MIT
-

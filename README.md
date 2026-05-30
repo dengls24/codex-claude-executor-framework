@@ -1,80 +1,161 @@
 # Codex-Claude Executor Framework
 
-> Reference implementation of a broader multi-tool method: route work across AI coding tools by capability, quota, marginal cost, and verifiability.
+> A usage-aware and capability-aware multi-tool workflow for local coding experiments.
 
-This repository uses Codex as the principal verifier and Claude Code with DeepSeek API as a lower-cost delegated executor. That pairing is only one case. The same flow also applies when a user has two comparable monthly subscriptions and wants to balance usage before either quota is exhausted.
+This repository provides a reference implementation of a broader method: use durable task artifacts to route work across multiple AI coding tools by **capability**, **remaining usage**, **marginal cost**, **risk**, and **verifiability**.
 
-Core methodological claim:
+The implemented demo uses:
 
-- Stronger or scarcer models should handle planning, risk judgment, and final verification.
-- Cheaper or more available models should handle bounded implementation loops when tests are strong.
-- Comparable subscription tools should be balanced by remaining usage and role fit.
-- Context should move through durable artifacts such as `TASK.md`, not through repeated manual chat summaries.
+- **Codex** as the principal planner, permission judge, and final verifier.
+- **Claude Code + DeepSeek API** as a lower-cost delegated adviser, executor, and reviewer.
 
-一个面向本地科研实验、代码试错和工程任务的多代理工作流：
+That pairing is only one case. The same method also applies when a user has two comparable monthly subscriptions, or any mixture of coding agents, writing models, API models, local scripts, CI, and human reviewers.
 
-**Codex 负责规划、权限判断和最终验收；Claude Code + DeepSeek API 负责低成本执行、独立建议和独立审查。**
+## Core Idea
 
-这个项目来自一个已跑通的本地 demo。目标不是让多个模型同时失控地改代码，而是把它们组织成一个可审计、可开关、可验收、可按用量调度的工程流程。
+Do not move context by repeatedly pasting long chat summaries between models. Instead, persist context as auditable files:
 
-## Why
+```text
+TASK.md              portable task specification
+CLAUDE_ADVICE.md     independent planning critique
+RESULT.md            execution report
+CLAUDE_REVIEW.md     independent review
+run-summary.json     execution metadata
+test logs            verification evidence
+```
 
-单独使用高能力模型做所有事情时，成本和上下文消耗会集中在反复试错阶段。这个框架把任务拆成两层：
+The stronger or scarcer model spends its budget on decisions that are hard to verify. The cheaper or more available model spends its budget on work that is easy to verify.
 
-- **Codex main agent**：高质量规划、任务边界、权限控制、测试验收、最终裁决。
-- **Claude Code executor**：基于 DeepSeek API 做低成本多轮试验、实现、第二意见。
+## Why This Matters
 
-核心收益：
+Users often subscribe to several AI tools at once. A common failure pattern is:
 
-- 降低 Codex 在重复实现和修错阶段的用量。
-- 降低从一个模型切换到另一个模型时的上下文迁移成本。
-- 根据用量限制、API 预算、模型特点和任务风险进行分工。
-- 通过 `advise -> execute -> review` 增加独立检查。
-- 所有 Claude 输出都落盘为文件，方便 Codex 和人类复核。
-- 默认禁用，按任务显式启用，降低误调用和权限风险。
+```text
+Use Model A until usage runs out
+-> manually summarize context
+-> restart in Model B
+-> lose decisions, failed attempts, file state, and validation history
+```
 
-## Practical Innovation
+This framework replaces that with:
 
-很多用户会同时拥有 Codex、Claude Code、GPT Pro 或其他 API 模型。真实工作中，一个工具用量不够时，用户往往手动把上下文迁移到另一个模型，这会带来：
+```text
+Persist context in TASK.md
+-> route the next step to the best available tool
+-> require structured output
+-> verify with tests and diff inspection
+```
 
-- 重复解释任务背景；
-- 丢失已做过的尝试和失败记录；
-- 不同模型之间决策不一致；
-- 高价值模型用量被消耗在重复试错上。
+The result is lower context migration cost, better quota utilization, and clearer accountability.
 
-本框架把上下文固化为 `TASK.md`、`RESULT.md`、`CLAUDE_ADVICE.md`、`CLAUDE_REVIEW.md`。因此模型切换不再依赖长聊天历史，而是依赖可审计的任务文件。Codex 可以根据当前用量和任务类型，把重复执行交给 Claude Code + DeepSeek，把规划和验收留给自己。
+## Two Primary Cases
 
-## Architecture
+### Case A: Strong Principal + Cheap Executor
+
+This is the current reference implementation. Codex Pro is stronger and better suited for planning, safety decisions, and final acceptance. Claude Code with DeepSeek API is cheaper but weaker, so it is used for bounded execution loops when validation is available.
 
 ```mermaid
 flowchart TD
-    U[User] --> C[Codex main agent]
+    U[User goal] --> C[Codex Pro principal]
     C --> T[TASK.md]
-    T --> A[Claude advise]
+    T --> A[Claude Code + DeepSeek advise]
     A --> AD[CLAUDE_ADVICE.md]
     AD --> C
-    C --> E[Claude execute]
+    C --> E[Claude Code + DeepSeek execute]
     E --> R[RESULT.md]
     E --> D[Code diff]
-    R --> V[Claude review]
-    D --> V
-    V --> RV[CLAUDE_REVIEW.md]
-    RV --> C
+    R --> RV[Claude Code + DeepSeek review]
+    D --> RV
+    RV --> CR[CLAUDE_REVIEW.md]
+    CR --> C
     D --> C
-    C --> TEST[Codex runs tests]
+    C --> TEST[Codex runs tests and inspects diff]
     TEST --> DECIDE{Accept?}
-    DECIDE -->|yes| DONE[Ship]
-    DECIDE -->|no| T2[Narrow task and retry]
-    T2 --> E
+    DECIDE -->|Yes| DONE[Ship]
+    DECIDE -->|No| RETRY[Narrow task and retry]
+    RETRY --> E
 ```
 
-## Modes
+Decision rule:
+
+- Use Codex for architecture, risk judgment, permissions, and final verification.
+- Use Claude Code + DeepSeek for repetitive edits, debug loops, and second opinions.
+- Accept nothing until Codex or deterministic tests verify the result.
+
+### Case B: Comparable Monthly Subscriptions
+
+This case is not about one model being much cheaper. It is about two or more tools with similar monthly plans but separate usage limits. The goal is to avoid exhausting one tool and then paying a large context migration cost.
+
+```mermaid
+flowchart TD
+    G[User goal] --> S[Portable task state: TASK.md]
+    S --> Q{Quota and role fit}
+    Q -->|Tool A low usage remaining| B[Route next step to Tool B]
+    Q -->|Tool B low usage remaining| A[Route next step to Tool A]
+    Q -->|Both healthy| F{Best role fit?}
+    F -->|Planning| P[Best planner]
+    F -->|Execution loop| E[Best executor]
+    F -->|Independent critique| R[Best reviewer]
+    A --> O[Structured artifacts]
+    B --> O
+    P --> O
+    E --> O
+    R --> O
+    O --> V[Separate verifier]
+    V --> D{Validated?}
+    D -->|Yes| DONE[Accept]
+    D -->|No| N[Revise TASK.md and reroute]
+    N --> Q
+```
+
+Decision rule:
+
+- Balance tools by remaining subscription usage before a quota emergency happens.
+- Route tasks by role fit, not brand loyalty.
+- Keep final verification separate from the agent that made the edit.
+- Use `TASK.md` as the portable context layer so switching tools is cheap.
+
+## General Multi-Tool Flow
+
+The framework generalizes beyond Codex and Claude:
+
+```mermaid
+flowchart LR
+    U[User] --> P[Principal or planner]
+    P --> T[TASK.md]
+    T --> X{Route by capability, quota, cost, risk}
+    X --> EX[Executor]
+    X --> RV[Reviewer]
+    X --> WR[Writer]
+    EX --> ART[Artifacts and diff]
+    RV --> ART
+    WR --> ART
+    ART --> VF[Verifier: Codex, tests, CI, or human]
+    VF --> OUT{Accept or retry}
+    OUT -->|Accept| DONE[Done]
+    OUT -->|Retry| T
+```
+
+Possible role assignments:
+
+| Role | Responsibility | Example tools |
+|---|---|---|
+| Principal | Owns goals, constraints, safety, and final acceptance | Codex Pro, senior human, strongest coding agent |
+| Planner | Converts intent into `TASK.md` | Codex, GPT Pro, Claude |
+| Executor | Performs bounded implementation loops | Claude Code, Codex CLI, cheaper API model |
+| Reviewer | Gives independent critique | Any second model or human reviewer |
+| Writer | Produces polished prose or slides | GPT Pro, Claude, domain writing model |
+| Verifier | Runs tests and audits files | Codex, CI, scripts, human |
+
+## Implemented Modes
+
+The bundled Codex skill supports three Claude delegation modes:
 
 | Mode | Purpose | Writes | Edits code? |
 |---|---|---|---|
-| `advise` | Claude independently analyzes the task, risks, and validation plan | `CLAUDE_ADVICE.md` | No |
-| `execute` | Claude implements the task and runs requested validation | `RESULT.md` | Yes |
-| `review` | Claude independently reviews diff, result, and logs | `CLAUDE_REVIEW.md` | No |
+| `advise` | Independent task analysis, risks, and validation plan | `CLAUDE_ADVICE.md` | No |
+| `execute` | Scoped implementation and requested validation | `RESULT.md` | Yes |
+| `review` | Independent review of diff, logs, and result | `CLAUDE_REVIEW.md` | No |
 
 Recommended loop:
 
@@ -91,6 +172,7 @@ Codex plan -> Claude advise -> Codex revise task -> Claude execute -> Claude rev
 |   |-- paper.md
 |   |-- manual.md
 |   |-- scheduler.md
+|   |-- generalized-framework.md
 |   |-- methodology.md
 |   `-- workflow.md
 |-- demo/
@@ -126,13 +208,13 @@ Install the skill into your local Codex skills folder:
 & ".\scripts\install-skill.ps1"
 ```
 
-Enable the executor:
+Enable the executor with a small budget:
 
 ```powershell
 & "$HOME\.codex\skills\claude-executor\scripts\Set-ClaudeExecutor.ps1" -Enabled $true -MaxBudgetUsd 0.20 -PermissionMode auto
 ```
 
-Run a delegated task:
+Run the demo workflow:
 
 ```powershell
 & "$HOME\.codex\skills\claude-executor\scripts\Invoke-ClaudeExecutor.ps1" `
@@ -151,7 +233,7 @@ Run a delegated task:
   -Workspace ".\demo"
 ```
 
-Then Codex or a human reviewer should run final validation:
+Then verify independently:
 
 ```powershell
 cd .\demo
@@ -168,8 +250,8 @@ Disable after use:
 
 - [Academic-style paper](docs/paper.md): problem statement, architecture, workflow, evaluation criteria, and limitations.
 - [User manual](docs/manual.md): installation, task writing, three-pass usage, recovery, and verification.
-- [Usage-aware scheduler](docs/scheduler.md): how to route tasks based on usage, cost, risk, and model strengths.
-- [Generalized framework](docs/generalized-framework.md): how the method extends beyond Codex + Claude/DeepSeek to any multi-tool setup.
+- [Usage-aware scheduler](docs/scheduler.md): routing based on usage, cost, risk, and model strengths.
+- [Generalized framework](docs/generalized-framework.md): extension beyond Codex + Claude/DeepSeek to any multi-tool setup.
 - [Methodology](docs/methodology.md): role separation and acceptance rule.
 - [Workflow](docs/workflow.md): state machine, permission strategy, and run artifacts.
 
